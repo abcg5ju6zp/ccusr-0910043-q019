@@ -123,6 +123,10 @@ class Builtins(collections.abc.Mapping):
         """项目内部接口说明。"""
         return self.__value_types.get(name, types.DataType.UNDEFINED)
 
+    def is_value_generator(self, name: str) -> bool:
+        """检查指定内置符号是否为值生成器（每次访问都会重新求值）。"""
+        return isinstance(self.__values.get(name), BuiltinValueGenerator)
+
     def __repr__(self) -> str:
         return "<{} namespace={!r} keys={!r} timezone={!r} >".format(self.__class__.__name__, self.namespace, tuple(self.keys()), self.timezone)
 

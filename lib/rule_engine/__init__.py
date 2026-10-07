@@ -38,6 +38,7 @@ from .engine import type_resolver_from_dataclass
 from .engine import type_resolver_from_dict
 from .engine import type_resolver_from_sqlalchemy
 from .engine import Context
+from .engine import IncrementalRule
 from .engine import Rule
 
 from .errors import AttributeResolutionError
@@ -54,6 +55,7 @@ __all__ = (
     'DataType',
     'EngineError',
     'EvaluationError',
+    'IncrementalRule',
     'Rule',
     'RuleSyntaxError',
     'SymbolResolutionError',

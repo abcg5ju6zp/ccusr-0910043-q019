@@ -6,6 +6,7 @@ from importlib import import_module
 engine = import_module("tests.engine")
 parser = import_module("tests.parser")
 thread_safety = import_module("tests.thread_safety")
+incremental = import_module("tests.incremental")
 
 
 EngineTests = engine.EngineTests
@@ -18,3 +19,4 @@ ParserTests = parser.ParserTests
 ParserLeftOperatorRightTests = parser.ParserLeftOperatorRightTests
 ParserLiteralTests = parser.ParserLiteralTests
 ThreadSafetyTests = thread_safety.ThreadSafetyTests
+IncrementalRuleTests = incremental.IncrementalRuleTests
