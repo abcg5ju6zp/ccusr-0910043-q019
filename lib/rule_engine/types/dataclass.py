@@ -84,7 +84,9 @@ def _resolve_dataclass_field_type(
             return _ObjectDataTypeDef.self
         if annotation in seen:
             return _ReferenceDataTypeDef(seen[annotation])
-        return _build_object_from_dataclass(annotation, annotation.__name__, accessor=None, _seen=seen, strict=strict)
+        return _build_object_from_dataclass(
+                annotation, annotation.__name__, accessor=None, accessor_dynamic=False, _seen=seen, strict=strict
+        )
 
     origin = typing.get_origin(annotation)
     args = typing.get_args(annotation)
@@ -116,6 +118,7 @@ def _build_object_from_dataclass(
         name: str,
         *,
         accessor: Callable[[Any, str], Any] | None,
+        accessor_dynamic: bool,
         strict: bool,
         _seen: dict[type, str]
 ) -> _ObjectDataTypeDef:
@@ -130,4 +133,4 @@ def _build_object_from_dataclass(
         if is_nullable:
             attr_type = _NullableDataTypeDef.wrap(attr_type)
         attributes[field.name] = attr_type
-    return _ObjectDataTypeDef(name, attributes=attributes, accessor=accessor)
+    return _ObjectDataTypeDef(name, attributes=attributes, accessor=accessor, accessor_dynamic=accessor_dynamic)

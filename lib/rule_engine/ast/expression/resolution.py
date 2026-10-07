@@ -145,10 +145,10 @@ class FunctionCallExpression(ExpressionBase):
         return LiteralExpressionBase.from_value(self.context, self.evaluate(None))
 
     def evaluate(self, thing: Any) -> Any:
-        function = self.function.evaluate(thing)
+        function = self.function._eval(thing)
         if not callable(function):
             raise errors.EvaluationError('data type mismatch (not a callable value)')
-        arguments = tuple(argument.evaluate(thing) for argument in self.arguments)
+        arguments = tuple(argument._eval(thing) for argument in self.arguments)
         function_name: str | None = '<unknown>'
         if self.function.result_type != DataType.UNDEFINED:
             function_type = self.function.result_type

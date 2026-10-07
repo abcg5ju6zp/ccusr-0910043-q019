@@ -103,9 +103,10 @@ def _substitute_self_references(definition: _DataTypeDef, target: _ObjectDataTyp
 
 class _ObjectDataTypeDef(_DataTypeDef):
     """项目内部接口说明。"""
-    __slots__ = ('attributes', 'accessor')
+    __slots__ = ('attributes', 'accessor', 'accessor_dynamic')
     attributes: dict[str, _DataTypeDef]
     accessor: Callable[[Any, str], Any]
+    accessor_dynamic: bool
     is_object: ClassVar[bool] = True
     # class attribute (not in __slots__) — set after class definition below; a sentinel used inside attribute
     # schemas to self-reference the enclosing OBJECT without repeating its name
@@ -115,12 +116,17 @@ class _ObjectDataTypeDef(_DataTypeDef):
             name: str,
             python_type: type = object,
             attributes: Mapping[str, _DataTypeDef] | None = None,
-            accessor: Callable[[Any, str], Any] | None = None
+            accessor: Callable[[Any, str], Any] | None = None,
+            accessor_dynamic: bool = False
     ) -> None:
         super(_ObjectDataTypeDef, self).__init__(name, python_type)
         self.is_scalar = False
         self.attributes = dict(attributes) if attributes else {}
         self.accessor = accessor if accessor is not None else getattr
+        # when True the accessor may return a different value for the same (object, attribute) pair without an input
+        # field changing (e.g. computed/dynamic properties backed by external state); such accesses defeat incremental
+        # reuse of the enclosing node
+        self.accessor_dynamic = accessor_dynamic
         # resolve self-references in the attribute schema now that self exists; cross-name references are left intact
         # and will be resolved lazily at rule parse time via Context.resolve_type
         for attr_name, attr_type in self.attributes.items():
@@ -132,14 +138,16 @@ class _ObjectDataTypeDef(_DataTypeDef):
             self,
             name: str,
             attributes: Mapping[str, _DataTypeDef] | None = None,
-            accessor: Callable[[Any, str], Any] | None = None
+            accessor: Callable[[Any, str], Any] | None = None,
+            accessor_dynamic: bool = False
     ) -> _ObjectDataTypeDef:
         """项目内部接口说明。"""
         return self.__class__(
                 name,
                 self.python_type,
                 attributes=attributes,
-                accessor=accessor
+                accessor=accessor,
+                accessor_dynamic=accessor_dynamic
         )
 
     @staticmethod
@@ -153,6 +161,7 @@ class _ObjectDataTypeDef(_DataTypeDef):
             cls: type,
             *,
             accessor: Callable[[Any, str], Any] | None = None,
+            accessor_dynamic: bool = False,
             strict: bool = True
     ) -> _ObjectDataTypeDef:
         """项目内部接口说明。"""
@@ -160,7 +169,9 @@ class _ObjectDataTypeDef(_DataTypeDef):
         from .dataclass import _build_object_from_dataclass
         if not dataclasses.is_dataclass(cls):
             raise TypeError('from_dataclass argument 2 must be a dataclass, not ' + type(cls).__name__)
-        return _build_object_from_dataclass(cls, name, accessor=accessor, _seen={}, strict=strict)
+        return _build_object_from_dataclass(
+                cls, name, accessor=accessor, accessor_dynamic=accessor_dynamic, _seen={}, strict=strict
+        )
 
     @staticmethod
     def from_sqlalchemy(
@@ -168,13 +179,16 @@ class _ObjectDataTypeDef(_DataTypeDef):
             cls: type,
             *,
             accessor: Callable[[Any, str], Any] | None = None,
+            accessor_dynamic: bool = False,
             strict: bool = True
     ) -> _ObjectDataTypeDef:
         """项目内部接口说明。"""
         from .sqlalchemy import _build_object_from_sqlalchemy
         if not hasattr(cls, '__mapper__'):
             raise TypeError('from_sqlalchemy argument 2 must be a SQLAlchemy mapped class, not ' + type(cls).__name__)
-        return _build_object_from_sqlalchemy(cls, name, accessor=accessor, _seen={}, strict=strict)
+        return _build_object_from_sqlalchemy(
+                cls, name, accessor=accessor, accessor_dynamic=accessor_dynamic, _seen={}, strict=strict
+        )
 
     def __repr__(self) -> str:
         return "<{} name={} attributes=[{}] >".format(

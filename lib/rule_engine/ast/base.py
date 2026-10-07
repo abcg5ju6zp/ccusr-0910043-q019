@@ -201,12 +201,21 @@ class Comment(ASTNodeBase):
 # Base Expression Classes
 ################################################################################
 class ExpressionBase(ASTNodeBase):
-    __slots__ = ('context',)
+    __slots__ = ('context', '_deps')
     context: 'Context'
     result_type: _DataTypeDef = DataType.UNDEFINED
     """成功求值结果的数据类型。"""
+    _deps: Any
+    """编译期依赖分析挂载的节点依赖摘要（None 表示尚未分析，走普通求值路径）。"""
     def __repr__(self) -> str:
         return "<{0} >".format(self.__class__.__name__)
+
+    def _eval(self, thing: Any) -> Any:
+        """子表达式求值入口：无增量会话时直接求值；否则交由当前修订版按节点依赖决定复用或重算。"""
+        revision = self.context._tls.incremental
+        if revision is None:
+            return self.evaluate(thing)
+        return revision.session._route(revision, self, thing)
 
     def _new_value(self, *args: Any, **kwargs: Any) -> Any:
         # perform a context aware load of value
@@ -278,7 +287,8 @@ class Statement(ASTNodeBase):
         return reduced
 
     def evaluate(self, thing: Any) -> Any:
-        return self.expression.evaluate(thing)
+        # 根表达式同样经过增量路由，使整棵树都能按节点复用
+        return self.expression._eval(thing)
 
     def to_graphviz(self, digraph: Any, *args: Any, **kwargs: Any) -> None:
         super(Statement, self).to_graphviz(digraph, *args, **kwargs)

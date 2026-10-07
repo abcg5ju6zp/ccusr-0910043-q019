@@ -38,6 +38,8 @@ from .engine import type_resolver_from_dataclass
 from .engine import type_resolver_from_dict
 from .engine import type_resolver_from_sqlalchemy
 from .engine import Context
+from .engine import IMPURE, PURE, VOLATILE
+from .engine import IncrementalSession
 from .engine import Rule
 
 from .errors import AttributeResolutionError
@@ -54,9 +56,13 @@ __all__ = (
     'DataType',
     'EngineError',
     'EvaluationError',
+    'IMPURE',
+    'IncrementalSession',
+    'PURE',
     'Rule',
     'RuleSyntaxError',
     'SymbolResolutionError',
+    'VOLATILE',
     'resolve_attribute',
     'resolve_item',
     'type_resolver_from_dataclass',

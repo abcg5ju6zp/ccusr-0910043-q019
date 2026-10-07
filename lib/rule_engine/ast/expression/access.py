@@ -86,9 +86,9 @@ class ContainsExpression(ExpressionBase):
         return "<{0} container={1!r} member={2!r} >".format(self.__class__.__name__, self.container, self.member)
 
     def evaluate(self, thing: Any) -> bool:
-        container_value = self.container.evaluate(thing)
+        container_value = self.container._eval(thing)
         container_value_type = DataType.from_value(container_value)
-        member_value = self.member.evaluate(thing)
+        member_value = self.member._eval(thing)
         if container_value_type == DataType.BYTES or container_value_type == DataType.STRING:
             if DataType.from_value(member_value) != container_value_type:
                 raise errors.EvaluationError('data type mismatch')
@@ -161,7 +161,7 @@ class GetAttributeExpression(ExpressionBase):
         return "<{0} name={1!r} >".format(self.__class__.__name__, self.name)
 
     def evaluate(self, thing: Any) -> Any:
-        resolved_obj = self.object.evaluate(thing)
+        resolved_obj = self.object._eval(thing)
         if resolved_obj is None and self.safe:
             return resolved_obj
         if resolved_obj is None and DataType.is_type(self.object.result_type, DataType.NULLABLE):
@@ -279,13 +279,13 @@ class GetItemExpression(ExpressionBase):
         return "<{0} container={1!r} item={2!r} >".format(self.__class__.__name__, self.container, self.item)
 
     def evaluate(self, thing: Any) -> Any:
-        resolved_obj = self.container.evaluate(thing)
+        resolved_obj = self.container._eval(thing)
         if resolved_obj is None:
             if self.safe:
                 return resolved_obj
             raise errors.EvaluationError('data type mismatch (container is null)')
 
-        resolved_item = self.item.evaluate(thing)
+        resolved_item = self.item._eval(thing)
         if isinstance(resolved_obj, (bytes, str, tuple)):
             _assert_is_integer_number(resolved_item)
             resolved_item = int(resolved_item)
@@ -374,17 +374,17 @@ class GetSliceExpression(ExpressionBase):
         return "<{0} container={1!r} start={2!r} stop={3!r} >".format(self.__class__.__name__, self.container, self.start, self.stop)
 
     def evaluate(self, thing: Any) -> Any:
-        resolved_obj = self.container.evaluate(thing)
+        resolved_obj = self.container._eval(thing)
         if resolved_obj is None:
             if self.safe:
                 return resolved_obj
             raise errors.EvaluationError('data type mismatch')
 
-        resolved_start = self.start.evaluate(thing)
+        resolved_start = self.start._eval(thing)
         if resolved_start is not None:
             _assert_is_integer_number(resolved_start)
             resolved_start = int(resolved_start)
-        resolved_stop = self.stop.evaluate(thing)
+        resolved_stop = self.stop._eval(thing)
         if resolved_stop is not None:
             _assert_is_integer_number(resolved_stop)
             resolved_stop = int(resolved_stop)

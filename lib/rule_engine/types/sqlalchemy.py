@@ -107,7 +107,7 @@ def _resolve_sqlalchemy_relationship_type(
         target = _ReferenceDataTypeDef(seen[target_cls])
     else:
         target = _build_object_from_sqlalchemy(
-            target_cls, target_cls.__name__, accessor=None, _seen=seen, strict=strict
+            target_cls, target_cls.__name__, accessor=None, accessor_dynamic=False, _seen=seen, strict=strict
         )
     if relationship.uselist:
         return cast(_DataTypeDef, DataType.ARRAY(target))
@@ -127,6 +127,7 @@ def _build_object_from_sqlalchemy(
         name: str,
         *,
         accessor: Callable[[Any, str], Any] | None,
+        accessor_dynamic: bool,
         _seen: dict[type, str],
         strict: bool
 ) -> _ObjectDataTypeDef:
@@ -150,4 +151,6 @@ def _build_object_from_sqlalchemy(
         if _sqlalchemy_relationship_is_nullable(relationship):
             attr_type = _NullableDataTypeDef.wrap(attr_type)
         attributes[relationship.key] = attr_type
-    return _ObjectDataTypeDef(name, attributes=attributes, accessor=accessor)
+    return _ObjectDataTypeDef(
+            name, attributes=attributes, accessor=accessor, accessor_dynamic=accessor_dynamic
+    )

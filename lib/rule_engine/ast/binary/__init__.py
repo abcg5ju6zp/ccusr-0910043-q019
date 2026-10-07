@@ -79,9 +79,9 @@ class CoalesceExpression(ExpressionBase):
         return reduced
 
     def evaluate(self, thing: Any) -> Any:
-        left_value = self.left.evaluate(thing)
+        left_value = self.left._eval(thing)
         if left_value is None:
-            return self.right.evaluate(thing)
+            return self.right._eval(thing)
         return left_value
 
     def reduce(self) -> ExpressionBase:

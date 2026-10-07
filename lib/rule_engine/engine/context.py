@@ -127,16 +127,23 @@ def type_resolver_from_sqlalchemy(cls: type, *, strict: bool = True) -> Callable
 
 class _ThreadLocalStorage(object):
     """项目内部接口说明。"""
-    __slots__ = ('assignment_scopes', 'regex_groups')
+    __slots__ = ('assignment_scopes', 'regex_groups', 'incremental', 'incr_previous', 'incr_uncacheable_depth')
     assignment_scopes: 'collections.deque[dict[str, ast.Assignment]]'
     regex_groups: tuple[str, ...] | None
     def __init__(self) -> None:
         self.assignment_scopes = collections.deque()
         self.regex_groups = None
+        # 当前线程绑定的增量求值修订版（None 表示走普通求值路径）
+        self.incremental: Any = None
+        self.incr_previous: Any = None
+        # 大于零时位于集合推导体内：按元素变化的子节点不参与跨评估共享
+        self.incr_uncacheable_depth: int = 0
 
     def reset(self) -> None:
         self.assignment_scopes.clear()
         self.regex_groups = None
+        # 注意：incremental* 字段不能清除——Rule.evaluate() 每次都会调用 reset()，而增量会话
+        # 需要在一次 Rule.evaluate() 期间保持修订版绑定
 
 class Context(object):
     """项目内部接口说明。"""
@@ -191,6 +198,31 @@ class Context(object):
         """The *mapping_attribute_lookup* parameter from :py:meth:`~__init__`."""
         self._mapping_fallback_lock = threading.Lock()
         self._mapping_fallback_warned = False
+        # (name, scope) -> purity；scope 为 None 表示根作用域的自定义函数，built-in 为内置作用域
+        self._function_purity: dict[tuple[str, str | None], str] = {}
+
+    def declare_function_purity(self, name: str, purity: str, *, scope: str | None = None) -> None:
+        """声明函数的纯度，供增量求值决定调用节点能否复用。
+
+        :param name: 函数在规则文本中引用时使用的名称（不含 ``$`` 前缀）。
+        :param purity: ``'pure'``（结果确定且无副作用）、``'volatile'``（结果随时间/随机等
+            变化）或 ``'impure'``（有副作用或读取外部状态）三者之一。
+        :param scope: 内置函数传 ``'built-in'``；根作用域的自定义函数传 ``None``。
+        """
+        from .incremental import _PURITY_LEVELS
+        if purity not in _PURITY_LEVELS:
+            raise ValueError('purity must be one of: ' + ', '.join(sorted(_PURITY_LEVELS)))
+        self._function_purity[(name, scope)] = purity
+
+    def declare_functions_pure(self, *names: str, scope: str | None = None) -> None:
+        """批量声明一组根作用域（或指定作用域）函数为纯函数。"""
+        from .incremental import PURE
+        for name in names:
+            self.declare_function_purity(name, PURE, scope=scope)
+
+    def resolve_function_purity(self, name: str, scope: str | None = None) -> str | None:
+        """返回函数的已登记纯度；未登记时返回 ``None``（调用方按保守策略处理）。"""
+        return self._function_purity.get((name, scope))
 
     def __getstate__(self) -> dict[str, Any]:
         return {
@@ -201,6 +233,7 @@ class Context(object):
                 'decimal_context': self.decimal_context,
                 'mapping_attribute_lookup': self.mapping_attribute_lookup,
                 '_mapping_fallback_warned': self._mapping_fallback_warned,
+                '_function_purity': dict(self._function_purity),
                 '_Context__type_resolver': self.__type_resolver,
                 '_Context__resolver': self.__resolver,
         }
@@ -213,6 +246,7 @@ class Context(object):
         self.decimal_context = state['decimal_context']
         self.mapping_attribute_lookup = state['mapping_attribute_lookup']
         self._mapping_fallback_warned = state['_mapping_fallback_warned']
+        self._function_purity = dict(state.get('_function_purity', ()))
         self.__type_resolver = state['_Context__type_resolver']
         self.__resolver = state['_Context__resolver']
         # recreate transient objects that can not be pickled

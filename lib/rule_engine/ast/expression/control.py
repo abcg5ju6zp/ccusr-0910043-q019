@@ -103,14 +103,21 @@ class ComprehensionExpression(ExpressionBase):
 
     def evaluate(self, thing: Any) -> Any:
         output_array: 'collections.deque[Any]' = collections.deque()
-        input_iterable = self.iterable.evaluate(thing)
+        input_iterable = self.iterable._eval(thing)
         if not DataType.from_value(input_iterable).is_iterable:
             raise errors.EvaluationError('data type mismatch (comprehension requires an iterable)')
-        for value in input_iterable:
-            assignment = Assignment(self.variable, value=value)
-            with self.context.assignments(assignment):
-                if self.condition is None or self.condition.evaluate(thing):
-                    output_array.append(self.result.evaluate(thing))
+        # 推导体内的节点会随每个元素重复求值（迭代变量遮蔽根字段），不能按 AST 节点共享缓存；
+        # 递增守卫后，体内子节点一律真实求值，离开推导体后恢复复用
+        storage = self.context._tls
+        storage.incr_uncacheable_depth += 1
+        try:
+            for value in input_iterable:
+                assignment = Assignment(self.variable, value=value)
+                with self.context.assignments(assignment):
+                    if self.condition is None or self.condition._eval(thing):
+                        output_array.append(self.result._eval(thing))
+        finally:
+            storage.incr_uncacheable_depth -= 1
         return tuple(output_array)
 
     def to_graphviz(self, digraph: Any, *args: Any, **kwargs: Any) -> None:
@@ -153,8 +160,8 @@ class TernaryExpression(ExpressionBase):
         return reduced
 
     def evaluate(self, thing: Any) -> Any:
-        case = (self.case_true if self.condition.evaluate(thing) else self.case_false)
-        return case.evaluate(thing)
+        case = (self.case_true if self.condition._eval(thing) else self.case_false)
+        return case._eval(thing)
 
     def reduce(self) -> ExpressionBase:
         if not _is_reduced(self.condition):
@@ -206,12 +213,12 @@ class UnaryExpression(ExpressionBase):
         return self._evaluator(thing)
 
     def __op(self, op: Callable[[Any], Any], thing: Any) -> Any:
-        return op(self.right.evaluate(thing))
+        return op(self.right._eval(thing))
 
     _op_not = functools.partialmethod(__op, operator.not_)
 
     def __op_arithmetic(self, op: Callable[[Any], Any], thing: Any) -> Any:
-        right = self.right.evaluate(thing)
+        right = self.right._eval(thing)
         if not is_numeric(right) and not isinstance(right, datetime.timedelta):
             raise errors.EvaluationError('data type mismatch (not a numeric or timedelta value)')
         return op(right)

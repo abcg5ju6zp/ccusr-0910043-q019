@@ -66,8 +66,8 @@ class AddExpression(BinaryExpressionBase):
                 self.result_type = self.left.result_type
 
     def _op_add(self, thing: Any) -> Any:
-        left_value = self.left.evaluate(thing)
-        right_value = self.right.evaluate(thing)
+        left_value = self.left._eval(thing)
+        right_value = self.right._eval(thing)
         if isinstance(left_value, datetime.datetime):
             if not isinstance(right_value, datetime.timedelta):
                 raise errors.EvaluationError('data type mismatch (not a timedelta value)')
@@ -109,8 +109,8 @@ class SubtractExpression(BinaryExpressionBase):
                 self.result_type = self.left.result_type
 
     def _op_sub(self, thing: Any) -> Any:
-        left_value = self.left.evaluate(thing)
-        right_value = self.right.evaluate(thing)
+        left_value = self.left._eval(thing)
+        right_value = self.right._eval(thing)
         if isinstance(left_value, datetime.datetime):
             if not isinstance(right_value, (datetime.datetime, datetime.timedelta)):
                 raise errors.EvaluationError('data type mismatch (not a datetime or timedelta value)')
@@ -131,9 +131,9 @@ class ArithmeticExpression(BinaryExpressionBase):
         _assert_not_nullable(self.right.result_type, role='right arithmetic operand')
 
     def __op_arithmetic(self, op: Callable[[Any, Any], Any], thing: Any) -> Any:
-        left_value = self.left.evaluate(thing)
+        left_value = self.left._eval(thing)
         _assert_is_numeric(left_value)
-        right_value = self.right.evaluate(thing)
+        right_value = self.right._eval(thing)
         _assert_is_numeric(right_value)
         try:
             result = op(left_value, right_value)
@@ -173,7 +173,7 @@ class BitwiseExpression(BinaryExpressionBase):
             self.result_type = DataType.SET  # this discards the member type info
 
     def _op_bitwise(self, op: Callable[[Any, Any], Any], thing: Any) -> Any:
-        left = self.left.evaluate(thing)
+        left = self.left._eval(thing)
         if DataType.from_value(left) == DataType.FLOAT:
             return self._op_bitwise_float(op, thing, left)
         elif DataType.is_type(DataType.from_value(left), DataType.SET):
@@ -182,12 +182,12 @@ class BitwiseExpression(BinaryExpressionBase):
 
     def _op_bitwise_float(self, op: Callable[[Any, Any], Any], thing: Any, left: Any) -> Any:
         _assert_is_natural_number(left)
-        right = self.right.evaluate(thing)
+        right = self.right._eval(thing)
         _assert_is_natural_number(right)
         return coerce_value(op(int(left), int(right)))
 
     def _op_bitwise_set(self, op: Callable[[Any, Any], Any], thing: Any, left: Any) -> Any:
-        right = self.right.evaluate(thing)
+        right = self.right._eval(thing)
         if not DataType.is_compatible(DataType.from_value(right), DataType.SET):
             raise errors.EvaluationError('data type mismatch')
         return op(left, right)

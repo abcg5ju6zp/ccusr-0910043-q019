@@ -36,6 +36,7 @@ from typing import Any, Iterable, Iterator, TYPE_CHECKING
 from .. import errors
 from ..parser import Parser
 from .context import Context
+from .incremental import IncrementalSession, NodeDependencies, analyze_statement
 
 if TYPE_CHECKING:
     import graphviz
@@ -53,6 +54,8 @@ class Rule(object):
         self.text = text
         self.context = context
         self.statement = self.parser.parse(text, context)
+        # 编译期记录字段、解析器与函数之间的真实依赖，供增量求值复用
+        self.dependencies: NodeDependencies = analyze_statement(self.statement)
 
     def __getstate__(self) -> dict[str, Any]:
         return {'text': self.text, 'context': self.context}
@@ -61,6 +64,7 @@ class Rule(object):
         self.text = state['text']
         self.context = state['context']
         self.statement = self.parser.parse(self.text, self.context)
+        self.dependencies = analyze_statement(self.statement)
 
     def __repr__(self) -> str:
         return "<{0} text={1!r} >".format(self.__class__.__name__, self.text)
@@ -86,6 +90,10 @@ class Rule(object):
         self.context._tls.reset()
         with decimal.localcontext(self.context.decimal_context):
             return self.statement.evaluate(thing)
+
+    def incremental_session(self) -> IncrementalSession:
+        """创建绑定本规则的增量求值会话，调用方提交变更集后只重算受影响节点。"""
+        return IncrementalSession(self)
 
     def matches(self, thing: Any) -> bool:
         """项目内部接口说明。"""

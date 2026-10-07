@@ -46,24 +46,24 @@ from .base import BinaryExpressionBase
 class LogicExpression(BinaryExpressionBase):
     """项目内部接口说明。"""
     def _op_and(self, thing: Any) -> bool:
-        return bool(self.left.evaluate(thing) and self.right.evaluate(thing))
+        return bool(self.left._eval(thing) and self.right._eval(thing))
 
     def _op_or(self, thing: Any) -> bool:
-        return bool(self.left.evaluate(thing) or self.right.evaluate(thing))
+        return bool(self.left._eval(thing) or self.right._eval(thing))
 
 class ComparisonExpression(BinaryExpressionBase):
     """项目内部接口说明。"""
     compatible_types: tuple[_DataTypeDef, ...] = BinaryExpressionBase.compatible_types + (DataType.OBJECT,)
     def _op_eq(self, thing: Any) -> bool:
-        left_value = self.left.evaluate(thing)
-        right_value = self.right.evaluate(thing)
+        left_value = self.left._eval(thing)
+        right_value = self.right._eval(thing)
         if type(left_value) is not type(right_value):
             return False
         return operator.eq(left_value, right_value)
 
     def _op_ne(self, thing: Any) -> bool:
-        left_value = self.left.evaluate(thing)
-        right_value = self.right.evaluate(thing)
+        left_value = self.left._eval(thing)
+        right_value = self.right._eval(thing)
         if type(left_value) is not type(right_value):
             return True
         return operator.ne(left_value, right_value)
@@ -80,8 +80,8 @@ class ArithmeticComparisonExpression(ComparisonExpression):
                 raise errors.EvaluationError('data type mismatch')
 
     def __op_arithmetic(self, op: Callable[[Any, Any], Any], thing: Any) -> Any:
-        left_value = self.left.evaluate(thing)
-        right_value = self.right.evaluate(thing)
+        left_value = self.left._eval(thing)
+        right_value = self.right._eval(thing)
         return self.__op_arithmetic_values(op, left_value, right_value)
 
     def __op_arithmetic_arrays(self, op: Callable[[Any, Any], Any], left_value: Any, right_value: Any) -> Any:
@@ -124,13 +124,13 @@ class FuzzyComparisonExpression(ComparisonExpression):
         return result
 
     def __op_regex(self, regex_function: str, modifier: Callable[[Any, Any], Any], thing: Any) -> Any:
-        left = self.left.evaluate(thing)
+        left = self.left._eval(thing)
         if not isinstance(left, str) and left is not None:
             raise errors.EvaluationError('data type mismatch')
         if isinstance(self.right, StringExpression):
             regex = self._right
         else:
-            regex = self.right.evaluate(thing)
+            regex = self.right._eval(thing)
             if isinstance(regex, str):
                 regex = self._compile_regex(regex)
             elif regex is not None:
